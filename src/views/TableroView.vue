@@ -25,8 +25,50 @@ const taskForm = ref({
   titulo: '',
   descripcion: '',
   prioridad: 'Media',
-  estado: 'pendiente'
+  estado: 'pendiente',
+  tags: '',
+  fechaVencimiento: ''
 })
+
+// Search State
+const showSearch = ref(false)
+const searchQuery = ref('')
+const searchInput = ref(null)
+
+// Global Search Listener (Ctrl+K)
+window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault()
+    showSearch.value = true
+    setTimeout(() => searchInput.value?.focus(), 100)
+  }
+  if (e.key === 'Escape') {
+    showSearch.value = false
+  }
+})
+
+const filteredTasks = computed(() => {
+  const query = searchQuery.value.toLowerCase().trim()
+  if (!query) return []
+  
+  const results = []
+  board.value?.tasks.forEach(task => {
+    if (
+      task.titulo.toLowerCase().includes(query) ||
+      task.descripcion?.toLowerCase().includes(query) ||
+      task.tags?.toLowerCase().includes(query)
+    ) {
+      results.push(task)
+    }
+  })
+  return results
+})
+
+const selectSearchResult = (task) => {
+  searchQuery.value = ''
+  showSearch.value = false
+  openEditModal(task)
+}
 
 const tasksByStatus = computed(() => {
   const grouped = {}
@@ -63,7 +105,14 @@ const onDrop = (evt, newStatus) => {
 // MODAL LOGIC
 const openCreateModal = (status = 'pendiente') => {
   isEditing.value = false
-  taskForm.value = { titulo: '', descripcion: '', prioridad: 'Media', estado: status }
+  taskForm.value = { 
+    titulo: '', 
+    descripcion: '', 
+    prioridad: 'Media', 
+    estado: status,
+    tags: '',
+    fechaVencimiento: ''
+  }
   showTaskModal.value = true
 }
 
@@ -137,6 +186,13 @@ const getTaskProgress = (task) => {
         </div>
         
         <div class="header-right">
+          <div class="search-hint-header" @click="showSearch = true">
+            <span class="search-icon-mini">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </span>
+            <span>Buscar...</span>
+            <span class="kbd">Ctrl K</span>
+          </div>
           <button class="btn-primary-premium" @click="openCreateModal()">
             <span class="icon">+</span>
             <span>Nueva Tarea</span>
@@ -178,11 +234,18 @@ const getTaskProgress = (task) => {
                       {{ priorityConfig(task.prioridad).label }}
                     </span>
                     <div class="meta-right">
+                      <span v-if="task.fechaVencimiento" class="due-tag" :class="{ overdue: new Date(task.fechaVencimiento) < new Date() && task.estado !== 'completada' }">
+                        <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10z"/></svg>
+                        {{ task.fechaVencimiento }}
+                      </span>
                       <span class="task-id">TM-{{ task.id.slice(0, 4) }}</span>
                       <button class="quick-delete" @click.stop="taskStore.deleteTask(id, task.id)" title="Eliminar tarea">
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                       </button>
                     </div>
+                  </div>
+                  <div v-if="task.tags" class="task-tags">
+                    <span v-for="tag in task.tags.split(',')" :key="tag" class="small-tag">{{ tag.trim() }}</span>
                   </div>
                   <h5 class="task-title">{{ task.titulo }}</h5>
                   <p v-if="task.descripcion" class="task-desc">{{ task.descripcion }}</p>
@@ -212,6 +275,47 @@ const getTaskProgress = (task) => {
         </div>
       </div>
     </div>
+
+    <!-- Global Search / Command Palette -->
+    <Transition name="fade">
+      <div v-if="showSearch" class="search-overlay" @click.self="showSearch = false">
+        <div class="search-modal">
+          <div class="search-input-wrapper">
+            <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input 
+              ref="searchInput"
+              v-model="searchQuery" 
+              placeholder="Escribe para buscar una tarea..."
+              class="search-main-input"
+            >
+            <div class="search-shortcut">ESC</div>
+          </div>
+          
+          <div v-if="searchQuery" class="search-results">
+            <div v-if="filteredTasks.length === 0" class="no-results">
+              No se encontraron resultados para "{{ searchQuery }}"
+            </div>
+            <div 
+              v-for="res in filteredTasks" 
+              :key="res.id" 
+              class="search-result-item"
+              @click="selectSearchResult(res)"
+            >
+              <div class="res-info">
+                <span class="res-title">{{ res.titulo }}</span>
+                <span class="res-meta">TM-{{ res.id.slice(0, 4) }} • {{ res.prioridad }}</span>
+              </div>
+              <div class="res-status" :style="{ color: taskStore.columns.find(c => c.id === res.estado)?.color }">
+                {{ taskStore.columns.find(c => c.id === res.estado)?.name }}
+              </div>
+            </div>
+          </div>
+          <div v-else class="search-hint">
+            Usa el buscador para filtrar rápidamente entre tareas por título, descripción o etiquetas.
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <!-- Task Detail / Create Modal -->
     <Transition name="modal">
@@ -251,6 +355,17 @@ const getTaskProgress = (task) => {
                     {{ col.name }}
                   </option>
                 </select>
+              </div>
+            </div>
+
+            <div class="meta-inputs">
+              <div class="input-item">
+                <label>Etiquetas (separadas por coma)</label>
+                <input v-model="taskForm.tags" placeholder="diseño, urgente, api..." class="small-input">
+              </div>
+              <div class="input-item">
+                <label>Fecha de Vencimiento</label>
+                <input type="date" v-model="taskForm.fechaVencimiento" class="small-input date-input">
               </div>
             </div>
 
@@ -496,6 +611,168 @@ const getTaskProgress = (task) => {
   gap: var(--space-2);
 }
 
+.due-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.due-tag.overdue {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.task-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: -4px;
+}
+
+.small-tag {
+  font-size: 0.6rem;
+  padding: 1px 6px;
+  background: var(--accent-color);
+  color: white;
+  border-radius: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.meta-inputs input.small-input {
+  width: 100%;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+/* Search Modal Styles */
+.search-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  padding-top: 10vh;
+}
+
+.search-modal {
+  width: 90%;
+  max-width: 600px;
+  height: fit-content;
+  max-height: 70vh;
+  background-color: var(--surface-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-premium);
+  overflow: hidden;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.search-input-wrapper {
+  padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.search-icon {
+  color: var(--text-muted);
+}
+
+.search-main-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  outline: none;
+}
+
+.search-shortcut {
+  background: var(--surface-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.search-results {
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.search-result-item {
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-md);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.search-result-item:hover {
+  background-color: var(--surface-secondary);
+}
+
+.res-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.res-title {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.res-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.res-status {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.search-hint, .no-results {
+  padding: var(--space-10);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
 .task-id {
   font-size: 0.65rem;
   color: var(--text-muted);
@@ -695,9 +972,44 @@ const getTaskProgress = (task) => {
   background: rgba(239, 68, 68, 0.1);
 }
 
-.footer-right {
+.header-right {
   display: flex;
-  gap: var(--space-4);
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.search-hint-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+  min-width: 320px;
+  justify-content: flex-start;
+}
+
+.search-hint-header span:nth-child(2) {
+  flex: 1;
+}
+
+.search-hint-header:hover {
+  border-color: var(--accent-color);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.search-hint-header .kbd {
+  background: var(--bg-color);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
 }
 
 /* Modal Transitions */
