@@ -98,6 +98,25 @@ const confirmDeleteBoard = () => {
     goBack()
   }
 }
+
+// SUBTASKS LOGIC
+const newSubtaskText = ref('')
+const handleAddSubtask = () => {
+  if (!newSubtaskText.value.trim()) return
+  taskStore.addSubtask(props.id, selectedTask.value.id, newSubtaskText.value)
+  newSubtaskText.value = ''
+}
+
+const completedSubtasksCount = computed(() => {
+  if (!selectedTask.value?.subtasks) return 0
+  return selectedTask.value.subtasks.filter(st => st.completed).length
+})
+
+const getTaskProgress = (task) => {
+  if (!task.subtasks || task.subtasks.length === 0) return 0
+  const completed = task.subtasks.filter(st => st.completed).length
+  return Math.round((completed / task.subtasks.length) * 100)
+}
 </script>
 
 <template>
@@ -169,6 +188,14 @@ const confirmDeleteBoard = () => {
                   <p v-if="task.descripcion" class="task-desc">{{ task.descripcion }}</p>
                   
                   <div class="card-footer">
+                    <div class="footer-left">
+                      <div v-if="task.subtasks?.length > 0" class="progress-mini" :title="`${getTaskProgress(task)}% completado`">
+                        <div class="progress-bar-container">
+                          <div class="progress-bar" :style="{ width: getTaskProgress(task) + '%' }"></div>
+                        </div>
+                        <span class="progress-text">{{ task.subtasks.filter(st => st.completed).length }}/{{ task.subtasks.length }}</span>
+                      </div>
+                    </div>
                     <div class="avatar-mini">{{ task.titulo[0] }}</div>
                   </div>
                 </div>
@@ -234,6 +261,30 @@ const confirmDeleteBoard = () => {
                 placeholder="Añade una descripción detallada..."
                 rows="4"
               ></textarea>
+            </div>
+
+            <!-- Subtasks Section -->
+            <div v-if="isEditing" class="subtasks-section">
+              <label>Lista de verificación ({{ completedSubtasksCount }}/{{ selectedTask.subtasks?.length || 0 }})</label>
+              <div class="subtasks-list">
+                <div v-for="st in selectedTask.subtasks" :key="st.id" class="subtask-item">
+                  <input 
+                    type="checkbox" 
+                    :checked="st.completed" 
+                    @change="taskStore.toggleSubtask(id, selectedTask.id, st.id)"
+                  >
+                  <span :class="{ completed: st.completed }">{{ st.text }}</span>
+                  <button class="remove-st" @click="taskStore.deleteSubtask(id, selectedTask.id, st.id)">&times;</button>
+                </div>
+              </div>
+              <div class="add-subtask">
+                <input 
+                  v-model="newSubtaskText" 
+                  placeholder="Añadir paso..."
+                  @keyup.enter="handleAddSubtask"
+                >
+                <button @click="handleAddSubtask">Añadir</button>
+              </div>
             </div>
           </div>
 
@@ -656,5 +707,144 @@ const confirmDeleteBoard = () => {
 .modal-enter-from, .modal-leave-to {
   opacity: 0;
   transform: scale(0.95) translateY(20px);
+}
+
+/* Subtasks Section Styles */
+.subtasks-section {
+  margin-top: var(--space-8);
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--border-color);
+}
+
+.subtasks-section label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--space-4);
+}
+
+.subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition: var(--transition-main);
+}
+
+.subtask-item:hover {
+  border-color: var(--border-color);
+}
+
+.subtask-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-color);
+  cursor: pointer;
+}
+
+.subtask-item span {
+  flex: 1;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.subtask-item span.completed {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.remove-st {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.subtask-item:hover .remove-st {
+  opacity: 1;
+}
+
+.add-subtask {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.add-subtask input {
+  flex: 1;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.add-subtask button {
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  transition: var(--transition-main);
+}
+
+.add-subtask button:hover {
+  background: var(--border-color);
+}
+
+/* Card Progress Styles */
+.footer-left {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.progress-mini {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 10px;
+  border-radius: 20px;
+  width: fit-content;
+}
+
+.progress-bar-container {
+  width: 40px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--accent-color);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 600;
 }
 </style>

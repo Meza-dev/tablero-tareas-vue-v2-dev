@@ -86,6 +86,47 @@ export const useTaskStore = defineStore('taskStore', {
                     this.saveToLocal()
                 }
             }
+        },
+
+        addSubtask(boardId, taskId, text) {
+            const board = this.boards.find(b => b.id === boardId)
+            if (board) {
+                const task = board.tasks.find(t => t.id === taskId)
+                if (task) {
+                    if (!task.subtasks) task.subtasks = []
+                    task.subtasks.push({
+                        id: crypto.randomUUID(),
+                        text,
+                        completed: false
+                    })
+                    this.saveToLocal()
+                }
+            }
+        },
+
+        toggleSubtask(boardId, taskId, subtaskId) {
+            const board = this.boards.find(b => b.id === boardId)
+            if (board) {
+                const task = board.tasks.find(t => t.id === taskId)
+                if (task && task.subtasks) {
+                    const subtask = task.subtasks.find(st => st.id === subtaskId)
+                    if (subtask) {
+                        subtask.completed = !subtask.completed
+                        this.saveToLocal()
+                    }
+                }
+            }
+        },
+
+        deleteSubtask(boardId, taskId, subtaskId) {
+            const board = this.boards.find(b => b.id === boardId)
+            if (board) {
+                const task = board.tasks.find(t => t.id === taskId)
+                if (task && task.subtasks) {
+                    task.subtasks = task.subtasks.filter(st => st.id !== subtaskId)
+                    this.saveToLocal()
+                }
+            }
         }
     }
 })
