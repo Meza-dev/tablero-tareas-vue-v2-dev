@@ -8,6 +8,16 @@ const router = useRouter()
 
 const showCreateModal = ref(false)
 const newBoardName = ref('')
+const isSubmitting = ref(false)
+const alerts = ref([])
+
+const addAlert = (message, type = 'success') => {
+  const id = Date.now()
+  alerts.value.push({ id, message, type })
+  setTimeout(() => {
+    alerts.value = alerts.value.filter(a => a.id !== id)
+  }, 3000)
+}
 
 const goToBoard = (id) => {
   router.push({ name: 'tablero', params: { id } })
@@ -15,16 +25,38 @@ const goToBoard = (id) => {
 
 const handleCreateBoard = () => {
   if (!newBoardName.value.trim()) return
-  const id = taskStore.addBoard(newBoardName.value)
-  showCreateModal.value = false
-  newBoardName.value = ''
-  goToBoard(id)
+  if (isSubmitting.value) return
+  
+  isSubmitting.value = true
+  try {
+    const id = taskStore.addBoard(newBoardName.value)
+    addAlert('Tablero creado')
+    showCreateModal.value = false
+    newBoardName.value = ''
+    setTimeout(() => goToBoard(id), 500)
+  } catch (err) {
+    addAlert('Error al intentar crear', 'error')
+  } finally {
+    setTimeout(() => {
+      isSubmitting.value = false
+    }, 1000)
+  }
 }
 </script>
 
 <template>
   <div class="workspace-wrapper">
     <div class="ambient-glow"></div>
+    
+    <div class="alerts-container">
+      <TransitionGroup name="alert">
+        <div v-for="alert in alerts" :key="alert.id" class="alert-item" :class="alert.type">
+          <svg v-if="alert.type === 'success'" class="alert-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <svg v-else class="alert-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          {{ alert.message }}
+        </div>
+      </TransitionGroup>
+    </div>
     
     <div class="workspace-container">
       <header class="workspace-header">
@@ -96,8 +128,13 @@ const handleCreateBoard = () => {
           </div>
           <footer class="modal-footer">
             <button class="btn-secondary" @click="showCreateModal = false">Cancelar</button>
-            <button class="btn-primary" @click="handleCreateBoard" :disabled="!newBoardName.trim()">
-              Crear Tablero
+            <button 
+              class="btn-primary" 
+              @click="handleCreateBoard" 
+              :disabled="!newBoardName.trim() || isSubmitting"
+            >
+              <span v-if="isSubmitting" class="loader-mini"></span>
+              {{ isSubmitting ? 'Creando...' : 'Crear Tablero' }}
             </button>
           </footer>
         </div>
@@ -466,5 +503,67 @@ const handleCreateBoard = () => {
   .workspace-header h1 {
     font-size: 2rem;
   }
+}
+
+/* Alert System Styles */
+.alerts-container {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.alert-item {
+  background: var(--surface-primary);
+  border: 1px solid var(--border-color);
+  padding: 12px 24px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  color: var(--text-primary);
+  font-weight: 600;
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 300px;
+  justify-content: center;
+}
+
+.alert-item.success {
+  border-left: 4px solid #10b981;
+}
+
+.alert-item.error {
+  border-left: 4px solid #ef4444;
+}
+
+/* Alert Transitions */
+.alert-enter-active, .alert-leave-active {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.alert-enter-from, .alert-leave-to {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.9);
+}
+
+/* Loader Styles */
+.loader-mini {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

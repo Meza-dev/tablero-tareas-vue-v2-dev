@@ -30,6 +30,19 @@ const taskForm = ref({
   fechaVencimiento: ''
 })
 
+// Validation & Alerts State
+const isSubmitting = ref(false)
+const titleError = ref(false)
+const alerts = ref([])
+
+const addAlert = (message, type = 'success') => {
+  const id = Date.now()
+  alerts.value.push({ id, message, type })
+  setTimeout(() => {
+    alerts.value = alerts.value.filter(a => a.id !== id)
+  }, 3000)
+}
+
 // Search State
 const showSearch = ref(false)
 const searchQuery = ref('')
@@ -105,6 +118,7 @@ const onDrop = (evt, newStatus) => {
 // MODAL LOGIC
 const openCreateModal = (status = 'pendiente') => {
   isEditing.value = false
+  titleError.value = false
   taskForm.value = { 
     titulo: '', 
     descripcion: '', 
@@ -124,14 +138,37 @@ const openEditModal = (task) => {
 }
 
 const handleTaskSubmit = () => {
-  if (!taskForm.value.titulo.trim()) return
+  // 1. Prevent Duplicate immediately
+  if (isSubmitting.value) return
   
-  if (isEditing.value) {
-    taskStore.updateTask(props.id, selectedTask.value.id, taskForm.value)
-  } else {
-    taskStore.addTask(props.id, taskForm.value)
+  // 2. Reset Errors
+  titleError.value = false
+  
+  // 3. Validation
+  if (!taskForm.value.titulo.trim()) {
+    titleError.value = true
+    return
   }
-  showTaskModal.value = false
+  
+  isSubmitting.value = true
+  
+  try {
+    if (isEditing.value) {
+      taskStore.updateTask(props.id, selectedTask.value.id, { ...taskForm.value })
+      addAlert('Cambios guardados')
+    } else {
+      taskStore.addTask(props.id, { ...taskForm.value })
+      addAlert('Tarea creada')
+    }
+    showTaskModal.value = false
+  } catch (err) {
+    addAlert('Error al procesar', 'error')
+  } finally {
+    // Small delay before enabling again to avoid accidental double-clicks
+    setTimeout(() => {
+      isSubmitting.value = false
+    }, 500)
+  }
 }
 
 const deleteTask = () => {
@@ -171,6 +208,16 @@ const getTaskProgress = (task) => {
 <template>
   <div v-if="board" class="board-wrapper">
     <div class="ambient-glow"></div>
+
+    <div class="alerts-container">
+      <TransitionGroup name="alert">
+        <div v-for="alert in alerts" :key="alert.id" class="alert-item" :class="alert.type">
+          <svg v-if="alert.type === 'success'" class="alert-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <svg v-else class="alert-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          {{ alert.message }}
+        </div>
+      </TransitionGroup>
+    </div>
 
     <div class="board-container">
       <header class="board-header">
@@ -332,12 +379,17 @@ const getTaskProgress = (task) => {
           </header>
           
           <div class="modal-body">
-            <input 
-              v-model="taskForm.titulo" 
-              class="title-input" 
-              placeholder="Título de la tarea"
-              @keyup.enter="handleTaskSubmit"
-            >
+            <div class="input-wrapper">
+              <input 
+                v-model="taskForm.titulo" 
+                class="title-input" 
+                :class="{ 'input-error': titleError }"
+                placeholder="Título de la tarea"
+                @keyup.enter="handleTaskSubmit"
+                @input="titleError = false"
+              >
+              <span v-if="titleError" class="error-text">El título es obligatorio</span>
+            </div>
             
             <div class="meta-inputs">
               <div class="input-item">
@@ -407,8 +459,13 @@ const getTaskProgress = (task) => {
             <button v-if="isEditing" class="btn-danger" @click="deleteTask">Eliminar</button>
             <div class="footer-right">
               <button class="btn-secondary" @click="showTaskModal = false">Cancelar</button>
-              <button class="btn-primary" @click="handleTaskSubmit">
-                {{ isEditing ? 'Guardar Cambios' : 'Crear Tarea' }}
+              <button 
+                class="btn-primary" 
+                :disabled="isSubmitting"
+                @click="handleTaskSubmit"
+              >
+                <span v-if="isSubmitting" class="loader-mini"></span>
+                {{ isSubmitting ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Crear Tarea') }}
               </button>
             </div>
           </footer>
@@ -1158,5 +1215,87 @@ const getTaskProgress = (task) => {
   font-size: 0.7rem;
   color: var(--text-muted);
   font-weight: 600;
+}
+
+/* Alert System Styles */
+.alerts-container {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.alert-item {
+  background: var(--surface-primary);
+  border: 1px solid var(--border-color);
+  padding: 12px 24px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  color: var(--text-primary);
+  font-weight: 600;
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 300px;
+  justify-content: center;
+}
+
+.alert-item.success {
+  border-left: 4px solid #10b981;
+}
+
+.alert-item.error {
+  border-left: 4px solid #ef4444;
+}
+
+/* Validation Styles */
+.input-wrapper {
+  margin-bottom: var(--space-6);
+}
+
+.title-input.input-error {
+  border-bottom: 2px solid #ef4444 !important;
+}
+
+.error-text {
+  color: #ef4444;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* Loader Styles */
+.loader-mini {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Alert Transitions */
+.alert-enter-active, .alert-leave-active {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.alert-enter-from {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.9);
+}
+.alert-leave-to {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.9);
 }
 </style>
