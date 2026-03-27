@@ -1,10 +1,14 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useRouter } from 'vue-router'
 
 const taskStore = useTaskStore()
 const router = useRouter()
+
+onMounted(() => {
+  taskStore.fetchBoard()
+})
 
 const showCreateModal = ref(false)
 const newBoardName = ref('')
@@ -23,13 +27,30 @@ const goToBoard = (id) => {
   router.push({ name: 'tablero', params: { id } })
 }
 
-const handleCreateBoard = () => {
+const showConfirmModal = ref(false)
+const boardToDelete = ref(null)
+
+const requestDeleteBoard = (board) => {
+  boardToDelete.value = board
+  showConfirmModal.value = true
+}
+
+const confirmDeleteBoard = () => {
+  if (boardToDelete.value) {
+    taskStore.deleteBoard(boardToDelete.value.id)
+    addAlert(`Tablero "${boardToDelete.value.name}" eliminado`)
+    showConfirmModal.value = false
+    boardToDelete.value = null
+  }
+}
+
+const handleCreateBoard = async () => {
   if (!newBoardName.value.trim()) return
   if (isSubmitting.value) return
   
   isSubmitting.value = true
   try {
-    const id = taskStore.addBoard(newBoardName.value)
+    const id = await taskStore.addBoard(newBoardName.value)
     addAlert('Tablero creado')
     showCreateModal.value = false
     newBoardName.value = ''
@@ -42,6 +63,7 @@ const handleCreateBoard = () => {
     }, 1000)
   }
 }
+
 </script>
 
 <template>
@@ -75,9 +97,10 @@ const handleCreateBoard = () => {
             <div class="board-header">
               <h3>{{ board.name }}</h3>
               <div class="header-right-actions">
-                <button class="quick-delete-board" @click.stop="taskStore.deleteBoard(board.id)" title="Eliminar tablero">
+                <button class="quick-delete-board" @click.stop="requestDeleteBoard(board)" title="Eliminar tablero">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 </button>
+
                 <div class="status-indicator"></div>
               </div>
             </div>
@@ -140,8 +163,26 @@ const handleCreateBoard = () => {
         </div>
       </div>
     </Transition>
+
+    <!-- Confirm Delete Modal -->
+    <Transition name="modal">
+      <div v-if="showConfirmModal" class="modal-overlay danger-zone" @click.self="showConfirmModal = false">
+        <div class="modal-content confirm-modal">
+          <div class="modal-body text-center">
+            <div class="warning-icon">⚠️</div>
+            <h2>¿Eliminar Tablero?</h2>
+            <p>Estás a punto de eliminar <strong>{{ boardToDelete?.name }}</strong>. Todas las tareas asociadas se perderán permanentemente.</p>
+          </div>
+          <footer class="modal-footer">
+            <button class="btn-secondary" @click="showConfirmModal = false">Cancelar</button>
+            <button class="btn-primary-danger" @click="confirmDeleteBoard">Sí, Eliminar</button>
+          </footer>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
+
 
 <style scoped>
 .workspace-wrapper {
@@ -421,20 +462,9 @@ const handleCreateBoard = () => {
 }
 
 .input-group input {
-  background-color: var(--bg-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
-  color: var(--text-primary);
-  font-size: 1rem;
-  outline: none;
-  transition: var(--transition-main);
+  /* Estilos globales en main.css */
 }
 
-.input-group input:focus {
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 2px var(--accent-glow);
-}
 
 .modal-footer {
   padding: var(--space-6);
@@ -442,17 +472,41 @@ const handleCreateBoard = () => {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-4);
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: rgba(0, 0, 0, 0.2);
 }
 
-.btn-secondary {
-  background: transparent;
-  color: var(--text-secondary);
-  font-weight: 600;
-  padding: var(--space-3) var(--space-6);
-  border-radius: var(--radius-md);
-  transition: var(--transition-main);
+.btn-primary-danger {
+  background: linear-gradient(135deg, #EF4444, #B91C1C);
+  color: white;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
 }
+
+.btn-primary-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.5);
+}
+
+.confirm-modal {
+  max-width: 400px;
+  text-align: center;
+}
+
+.warning-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+}
+
+.text-center {
+  text-align: center;
+}
+
+
+.btn-secondary {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
 
 .btn-secondary:hover {
   color: var(--text-primary);

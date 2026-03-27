@@ -1,5 +1,18 @@
 <script setup>
+import { onMounted, onUnmounted } from 'vue'
 import { RouterView } from 'vue-router'
+import { useTaskStore } from '@/stores/taskStore'
+
+const taskStore = useTaskStore()
+
+onMounted(async () => {
+  await taskStore.fetchBoard()
+  taskStore.startPolling(5000) // Revisar cambios cada 5 segundos
+})
+
+onUnmounted(() => {
+  taskStore.stopPolling()
+})
 </script>
 
 <template>

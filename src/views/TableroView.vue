@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useRouter } from 'vue-router'
 
@@ -12,6 +12,12 @@ const props = defineProps({
 
 const taskStore = useTaskStore()
 const router = useRouter()
+
+onMounted(async () => {
+  if (taskStore.boards.length === 0) {
+    await taskStore.fetchBoard()
+  }
+})
 
 const board = computed(() => taskStore.boards.find(b => b.id === props.id))
 
@@ -43,8 +49,27 @@ const addAlert = (message, type = 'success') => {
   }, 3000)
 }
 
+// Confirm Modal State
+const showConfirmModal = ref(false)
+const confirmModalConfig = ref({
+  title: '',
+  message: '',
+  onConfirm: () => {}
+})
+
+const requestConfirm = (title, message, callback) => {
+  confirmModalConfig.value = { title, message, onConfirm: callback }
+  showConfirmModal.value = true
+}
+
+const handleConfirmAction = () => {
+  confirmModalConfig.value.onConfirm()
+  showConfirmModal.value = false
+}
+
 // Search State
 const showSearch = ref(false)
+
 const searchQuery = ref('')
 const searchInput = ref(null)
 
@@ -172,18 +197,29 @@ const handleTaskSubmit = () => {
 }
 
 const deleteTask = () => {
-  if (confirm('¿Estás seguro de eliminar esta tarea?')) {
-    taskStore.deleteTask(props.id, selectedTask.value.id)
-    showTaskModal.value = false
-  }
+  requestConfirm(
+    '¿Eliminar Tarea?',
+    `¿Estás seguro de eliminar "${selectedTask.value.titulo}"? Esta acción no se puede deshacer.`,
+    () => {
+      taskStore.deleteTask(props.id, selectedTask.value.id)
+      showTaskModal.value = false
+      addAlert('Tarea eliminada')
+    }
+  )
 }
 
 const confirmDeleteBoard = () => {
-  if (confirm(`¿Estás seguro de que deseas eliminar el tablero "${board.value.name}"? Esta acción no se puede deshacer.`)) {
-    taskStore.deleteBoard(props.id)
-    goBack()
-  }
+  requestConfirm(
+    '¿Eliminar Tablero?',
+    `¿Estás seguro de que deseas eliminar el tablero "${board.value.name}"? Esta acción no se puede deshacer.`,
+    () => {
+      taskStore.deleteBoard(props.id)
+      goBack()
+      // Note: addAlert on next page might not show if not global store, but taskStore handles it
+    }
+  )
 }
+
 
 // SUBTASKS LOGIC
 const newSubtaskText = ref('')
@@ -286,9 +322,10 @@ const getTaskProgress = (task) => {
                         {{ task.fechaVencimiento }}
                       </span>
                       <span class="task-id">TM-{{ task.id.slice(0, 4) }}</span>
-                      <button class="quick-delete" @click.stop="taskStore.deleteTask(id, task.id)" title="Eliminar tarea">
+                      <button class="quick-delete" @click.stop="requestConfirm('¿Eliminar Tarea?', `¿Eliminar '${task.titulo}'?`, () => taskStore.deleteTask(id, task.id))" title="Eliminar tarea">
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                       </button>
+
                     </div>
                   </div>
                   <div v-if="task.tags" class="task-tags">
@@ -441,7 +478,8 @@ const getTaskProgress = (task) => {
                     @change="taskStore.toggleSubtask(id, selectedTask.id, st.id)"
                   >
                   <span :class="{ completed: st.completed }">{{ st.text }}</span>
-                  <button class="remove-st" @click="taskStore.deleteSubtask(id, selectedTask.id, st.id)">&times;</button>
+                  <button class="remove-st" @click="requestConfirm('¿Eliminar Paso?', `¿Eliminar '${st.text}'?`, () => taskStore.deleteSubtask(id, selectedTask.id, st.id))">&times;</button>
+
                 </div>
               </div>
               <div class="add-subtask">
@@ -472,8 +510,26 @@ const getTaskProgress = (task) => {
         </div>
       </div>
     </Transition>
+
+    <!-- Confirm Action Modal -->
+    <Transition name="modal">
+      <div v-if="showConfirmModal" class="modal-overlay danger-zone" @click.self="showConfirmModal = false">
+        <div class="modal-content confirm-modal">
+          <div class="modal-body text-center">
+            <div class="warning-icon">⚠️</div>
+            <h2>{{ confirmModalConfig.title }}</h2>
+            <p>{{ confirmModalConfig.message }}</p>
+          </div>
+          <footer class="modal-footer">
+            <button class="btn-secondary" @click="showConfirmModal = false">Cancelar</button>
+            <button class="btn-primary-danger" @click="handleConfirmAction">Confirmar</button>
+          </footer>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
+
 
 <style scoped>
 .board-wrapper {
@@ -718,12 +774,13 @@ const getTaskProgress = (task) => {
   position: fixed;
   inset: 0;
   background-color: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px); /* Un poco más de blur */
   z-index: 1000;
   display: flex;
   justify-content: center;
-  padding-top: 10vh;
+  padding-top: 15vh; /* Bajado un poco más */
 }
+
 
 .search-modal {
   width: 90%;
@@ -744,13 +801,14 @@ const getTaskProgress = (task) => {
 }
 
 .search-input-wrapper {
-  padding: var(--space-6) var(--space-8);
+  padding: var(--space-8) var(--space-10); /* Más espacio interno */
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-6); /* Mayor separación con el icono */
   background-color: rgba(255, 255, 255, 0.02);
 }
+
 
 .search-icon {
   color: var(--text-muted);
@@ -777,8 +835,12 @@ const getTaskProgress = (task) => {
 .search-results {
   max-height: 50vh;
   overflow-y: auto;
-  padding: var(--space-4);
+  padding: var(--space-6); /* Más espacio alrededor de la lista */
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* Separación entre cada resultado */
 }
+
 
 .search-result-item {
   padding: var(--space-4) var(--space-6);
@@ -787,17 +849,23 @@ const getTaskProgress = (task) => {
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
 }
 
 .search-result-item:hover {
   background-color: var(--surface-secondary);
+  border-color: var(--border-color);
+  transform: translateX(4px); /* Sutil desplazamiento al hover */
 }
+
 
 .res-info {
   display: flex;
   flex-direction: column;
+  gap: 4px; /* Espacio entre el título e ID */
 }
+
 
 .res-title {
   color: var(--text-primary);
@@ -995,16 +1063,11 @@ const getTaskProgress = (task) => {
   margin-bottom: var(--space-2);
 }
 
-.input-item select, .desc-section textarea {
-  width: 100%;
-  background-color: var(--bg-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
-  color: var(--text-primary);
-  outline: none;
-  font-family: inherit;
+.input-item select, .desc-section textarea, .small-input {
+  /* Usando estilos globales definidos en main.css */
+  margin-top: 4px;
 }
+
 
 .modal-footer {
   padding: var(--space-6) var(--space-8);
@@ -1012,22 +1075,62 @@ const getTaskProgress = (task) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: rgba(0, 0, 0, 0.2);
 }
 
+.footer-right {
+  display: flex;
+  gap: var(--space-4);
+}
+
+
 .btn-danger {
-  background: transparent;
   color: #EF4444;
   font-weight: 600;
-  padding: var(--space-2) var(--space-4);
+  padding: 8px 16px;
   border-radius: var(--radius-md);
   border: 1px solid rgba(239, 68, 68, 0.2);
   transition: var(--transition-main);
+  background: transparent;
 }
 
 .btn-danger:hover {
   background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
 }
+
+.btn-primary-danger {
+  background: linear-gradient(135deg, #EF4444, #B91C1C);
+  color: white;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+  padding: 10px 24px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: var(--transition-main);
+}
+
+.btn-primary-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.5);
+}
+
+.confirm-modal {
+  max-width: 400px;
+  text-align: center;
+}
+
+.warning-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+}
+
+.text-center {
+  text-align: center;
+}
+
+
 
 .header-right {
   display: flex;
@@ -1038,11 +1141,11 @@ const getTaskProgress = (task) => {
 .search-hint-header {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
   background: var(--surface-secondary);
   border: 1px solid var(--border-color);
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
   cursor: pointer;
   color: var(--text-muted);
   font-size: 0.85rem;
@@ -1051,14 +1154,16 @@ const getTaskProgress = (task) => {
   justify-content: flex-start;
 }
 
+
 .search-hint-header span:nth-child(2) {
   flex: 1;
 }
 
 .search-hint-header:hover {
   border-color: var(--accent-color);
-  background: rgba(59, 130, 246, 0.05);
+  background: rgba(99, 102, 241, 0.08);
 }
+
 
 .search-hint-header .kbd {
   background: var(--bg-color);
@@ -1156,13 +1261,8 @@ const getTaskProgress = (task) => {
 
 .add-subtask input {
   flex: 1;
-  background: var(--bg-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  color: var(--text-primary);
-  outline: none;
 }
+
 
 .add-subtask button {
   background: var(--surface-secondary);
@@ -1176,8 +1276,10 @@ const getTaskProgress = (task) => {
 }
 
 .add-subtask button:hover {
-  background: var(--border-color);
+  background: var(--surface-elevated);
+  border-color: var(--border-hover);
 }
+
 
 /* Card Progress Styles */
 .footer-left {

@@ -1,0 +1,50 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-03-25T00:00:00Z",
+  "projects": [
+    {
+      "id": "proj_example_001",
+      "name": "Proyecto de Ejemplo",
+      "description": "Este es un proyecto de ejemplo para demostrar la estructura",
+      "created": "2026-03-25",
+      "status": "active",
+      "tasks": [
+        {
+          "id": "task_example_001",
+          "title": "Tarea de ejemplo en Todo",
+          "description": "Esta es una tarea de ejemplo",
+          "status": "todo",
+          "priority": "medium",
+          "created": "2026-03-25",
+          "updated": "2026-03-25",
+          "tags": ["ejemplo", "demo"]
+        },
+        {
+          "id": "task_example_002",
+          "title": "Tarea en progreso",
+          "description": "Tarea que está siendo trabajada",
+          "status": "in-progress",
+          "priority": "high",
+          "created": "2026-03-25",
+          "updated": "2026-03-25",
+          "tags": ["urgente"]
+        },
+        {
+          "id": "task_example_003",
+          "title": "Tarea completada",
+          "description": "Esta tarea ya fue completada",
+          "status": "done",
+          "priority": "low",
+          "created": "2026-03-24",
+          "updated": "2026-03-25",
+          "completed": "2026-03-25",
+          "tags": ["completado"]
+        }
+      ]
+    }
+  ],
+  "config": {
+    "valid_statuses": ["todo", "in-progress", "review", "done", "on-hold", "rejected"],
+    "valid_priorities": ["low", "medium", "high", "urgent"]
+  }
+}

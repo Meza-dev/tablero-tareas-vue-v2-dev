@@ -4,13 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "run-p dev:vite dev:bridge",
+    "dev:vite": "vite",
+    "dev:bridge": "node board-bridge/board-server.js",
+    "install:all": "npm install && cd board-bridge && npm install",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "run-s lint:*",
     "lint:oxlint": "oxlint . --fix",
     "lint:eslint": "eslint . --fix --cache"
   },
+
   "dependencies": {
     "pinia": "^3.0.4",
     "vue": "^3.5.29",
